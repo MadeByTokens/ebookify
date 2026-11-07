@@ -153,8 +153,10 @@ untrusted, because the output may be published:
   images) must be http(s) and public. The address is validated at connect time, inside
   urllib3, and the connection goes to exactly the address that was checked, so DNS
   rebinding cannot swap it. Every redirect is checked, and a URL you typed stops being
-  trusted once it redirects to another host. Set `EBOOKIFY_ALLOW_PRIVATE=1` to allow
-  private addresses, for example behind a corporate proxy. RSS is parsed with
+  trusted once it redirects to another host. These guarded downloads ignore
+  `HTTP(S)_PROXY`, because a proxy would resolve the target itself; URLs you type still
+  use your proxy. On networks that only reach the internet through a proxy, set
+  `EBOOKIFY_ALLOW_PRIVATE=1`. That turns the guard off and the proxy back on. RSS is parsed with
   `defusedxml`.
 - **Reader page.** A content security policy allows only the page's own hashed inline
   scripts (hashed from the template and keyed widgets only, never from the assembled page)

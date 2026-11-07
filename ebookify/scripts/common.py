@@ -247,7 +247,13 @@ def download(url: str, dest: Path, timeout: int = 60, trusted: bool = False) -> 
         for _ in range(6):
             check_url(url, trusted)
             _net.untrusted = not trusted
-            r = requests.get(url, headers={"User-Agent": UA}, timeout=timeout, stream=True,
+            guarded = not trusted and _public_only()
+            with requests.Session() as sess:
+                # Through a proxy, the proxy resolves the target itself and the connect-time
+                # guard would only see the proxy's address. Guarded downloads therefore go
+                # direct; EBOOKIFY_ALLOW_PRIVATE=1 turns the guard off and proxies back on.
+                sess.trust_env = not guarded
+                r = sess.get(url, headers={"User-Agent": UA}, timeout=timeout, stream=True,
                              allow_redirects=False)
             if r.is_redirect and r.headers.get("location"):
                 nxt = urljoin(url, r.headers["location"])
