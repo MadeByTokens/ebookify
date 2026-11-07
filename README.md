@@ -1,5 +1,7 @@
 # ebookify
 
+![ebookify: web pages, PDFs, videos and podcasts flowing into an e-reader. Read the web like a book.](docs/banner.webp)
+
 An agent skill that turns web pages, PDFs, YouTube videos and podcast episodes into
 **readable offline ebooks (EPUB)** and **interactive HTML editions** for learning,
 teaching or just reading. The HTML editions work as Claude artifacts or as local files.
@@ -95,6 +97,7 @@ ebookify/                  the skill (this is what gets installed)
   assets/                  EPUB stylesheet, pandoc Lua filters, HTML reader template
   evals/                   test cases (prompt + graders), `claude plugin eval` layout
 tools/measure_outputs.py   measures EPUB/HTML outputs of an eval run for grading
+docs/banner.webp           README banner
 ```
 
 `ebookify-workspace/` (eval runs) and `ebooks/` (your books) are git-ignored.
