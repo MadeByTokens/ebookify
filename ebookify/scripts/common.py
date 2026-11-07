@@ -20,8 +20,10 @@ import json
 import mimetypes
 import os
 import re
+import secrets
 import socket
 import sys
+import threading
 import unicodedata
 from pathlib import Path
 from urllib.parse import urljoin, urlparse
@@ -136,6 +138,9 @@ class Book:
                 "description": short_description(meta.get("description")),
                 "cover": meta.get("cover"),
                 "created": today(),
+                # raw HTML is only honoured inside ::: {.widget key="<this>"} blocks;
+                # fetched text cannot know it, so it cannot smuggle in scripts
+                "widget_key": secrets.token_hex(8),
             }
             write_json(self.root / "book.json", book)
 
@@ -147,6 +152,14 @@ class Book:
 
     def meta(self) -> dict:
         return read_json(self.root / "book.json", {}) or {}
+
+    def widget_key(self) -> str:
+        """Per-book secret that marks agent-written widgets (created if missing)."""
+        meta = self.meta()
+        if meta and not meta.get("widget_key"):
+            meta["widget_key"] = secrets.token_hex(8)
+            write_json(self.root / "book.json", meta)
+        return meta.get("widget_key", "")
 
     # --- files -------------------------------------------------------------
     def write_draft(self, name: str, text: str) -> Path:
@@ -171,15 +184,20 @@ class Book:
 
 
 # --- images ------------------------------------------------------------------
+def _public_only() -> bool:
+    return not os.environ.get("EBOOKIFY_ALLOW_PRIVATE")
+
+
 def check_url(url: str, trusted: bool = False) -> None:
     """Raise ValueError unless url is http(s) and, for untrusted URLs (taken from fetched
-    content: feeds, pages, transcripts), resolves only to public addresses. Blocks
-    content from steering requests at localhost, the LAN or cloud metadata endpoints.
+    content: feeds, pages, transcripts), resolves only to public addresses. This is the
+    early, readable check; the binding check happens at connect time (see
+    _guarded_create_connection), so DNS rebinding between the two cannot slip through.
     Set EBOOKIFY_ALLOW_PRIVATE=1 to allow private addresses."""
     u = urlparse(url)
     if u.scheme not in ("http", "https") or not u.hostname:
         raise ValueError(f"refusing non-http(s) URL: {url[:100]}")
-    if trusted or os.environ.get("EBOOKIFY_ALLOW_PRIVATE"):
+    if trusted or not _public_only():
         return
     port = u.port or (443 if u.scheme == "https" else 80)
     for info in socket.getaddrinfo(u.hostname, port, proto=socket.IPPROTO_TCP):
@@ -188,19 +206,54 @@ def check_url(url: str, trusted: bool = False) -> None:
             raise ValueError(f"refusing {u.hostname}: resolves to non-public address {ip}")
 
 
+_net = threading.local()  # _net.untrusted is True while downloading an untrusted URL
+
+
+def _guarded_create_connection(address, *args, **kwargs):
+    """urllib3 connect hook: for untrusted downloads, resolve once, refuse non-public
+    addresses, and connect to exactly the address that was checked (no TOCTOU)."""
+    host, port = address
+    if not getattr(_net, "untrusted", False) or not _public_only():
+        return _orig_create_connection(address, *args, **kwargs)
+    infos = socket.getaddrinfo(host, port, 0, socket.SOCK_STREAM)
+    for info in infos:
+        ip = ipaddress.ip_address(info[4][0])
+        if not ip.is_global:
+            raise ConnectionRefusedError(f"refusing {host}: resolves to non-public address {ip}")
+    last = None
+    for info in infos:  # TLS still verifies the certificate against the original hostname
+        try:
+            return _orig_create_connection((info[4][0], port), *args, **kwargs)
+        except OSError as e:
+            last = e
+    raise last or OSError(f"could not connect to {host}")
+
+
+try:
+    import urllib3.util.connection as _u3conn
+    _orig_create_connection = _u3conn.create_connection
+    _u3conn.create_connection = _guarded_create_connection
+except ImportError:  # pragma: no cover
+    _orig_create_connection = None
+
+
 def download(url: str, dest: Path, timeout: int = 60, trusted: bool = False) -> Path | None:
     """Stream url to dest. trusted=True only for URLs the user typed; anything taken
     from fetched content must stay untrusted (see check_url). Redirects are followed
-    manually so every hop is checked."""
+    manually: every hop is checked, and trust ends at the first redirect to another host."""
     import requests
     tmp = dest.with_name(dest.name + ".part")
     try:
         for _ in range(6):
             check_url(url, trusted)
+            _net.untrusted = not trusted
             r = requests.get(url, headers={"User-Agent": UA}, timeout=timeout, stream=True,
                              allow_redirects=False)
             if r.is_redirect and r.headers.get("location"):
-                url = urljoin(url, r.headers["location"])
+                nxt = urljoin(url, r.headers["location"])
+                if urlparse(nxt).hostname != urlparse(url).hostname:
+                    trusted = False  # the user vouched for their URL, not for where it sends us
+                url = nxt
                 r.close()
                 continue
             break
@@ -215,6 +268,8 @@ def download(url: str, dest: Path, timeout: int = 60, trusted: bool = False) -> 
         log(f"  ! could not download {url[:200]}: {e}")
         tmp.unlink(missing_ok=True)
         return None
+    finally:
+        _net.untrusted = False
     tmp.replace(dest)
     return dest
 

@@ -48,9 +48,14 @@ def assemble_markdown(book: Book, ts_mode: str) -> str:
     return "\n\n".join(parts)
 
 
-# Always the first filter: only images/ files and data:image URIs may be embedded
-# (book text is untrusted and pandoc fetches whatever an image points to).
-SAFE_MEDIA = ["--lua-filter", str(ASSETS / "safe_media.lua")]
+# Book text is untrusted. Read markdown without in-document YAML metadata blocks (they
+# could inject header-includes), and always run safe_media.lua first: it neutralizes raw
+# HTML outside keyed widgets, restricts images to images/ and links to http(s)/mailto/#.
+MARKDOWN = "markdown+smart-yaml_metadata_block"
+
+
+def safe_media(book: Book) -> list[str]:
+    return ["-M", f"ebookify_widget_key={book.widget_key()}", "--lua-filter", str(ASSETS / "safe_media.lua")]
 
 
 def filter_reports(stderr: str) -> list[str]:
@@ -219,9 +224,9 @@ def main():
     n_h1 = count_top_headings(md) - (0 if a.no_about else 1)
     chapter_level = "1" if n_h1 > 1 else "2"
     out = Path(a.out) if a.out else book.root / "out" / f"{slugify(meta.get('title', 'book'))}.epub"
-    cmd = ["pandoc", str(build / "book.md"), "-f", "markdown+smart", "-t", "epub3", "-o", str(out),
+    cmd = ["pandoc", str(build / "book.md"), "-f", MARKDOWN, "-t", "epub3", "-o", str(out),
            "--toc", "--toc-depth=2", f"--epub-chapter-level={chapter_level}",
-           *SAFE_MEDIA, "--css", str(ASSETS / "epub.css"), "--epub-cover-image", str(cover_path),
+           *safe_media(book), "--css", str(ASSETS / "epub.css"), "--epub-cover-image", str(cover_path),
            "--metadata-file", str(meta_yaml), "--resource-path", str(book.root), "--mathml",
            "--metadata", f"title={meta.get('title')}"]
     cmd += ["--lua-filter", str(ASSETS / ("strip_interactive.lua" if a.keep_extras else "strip_extras.lua"))]

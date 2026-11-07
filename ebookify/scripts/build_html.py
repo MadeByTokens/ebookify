@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import hashlib
 import html
 import io
 import json
@@ -21,7 +22,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from build_epub import SAFE_MEDIA, about_section, assemble_markdown, filter_reports
+from build_epub import MARKDOWN, about_section, assemble_markdown, filter_reports, safe_media
 from common import Book, log, safe_image_path, slugify
 
 ASSETS = Path(__file__).resolve().parent.parent / "assets"
@@ -65,6 +66,17 @@ def inline_images(fragment: str, root: Path, max_px: int, quality: int) -> tuple
     return out, count
 
 
+def script_hashes(page: str) -> str:
+    """CSP hashes of every inline <script> in the finished page (the reader's own and the
+    agent's keyed widgets). Used instead of 'unsafe-inline' so nothing else can run,
+    including inline event handlers."""
+    out = []
+    for m in re.finditer(r"(?is)<script(?![^>]*\ssrc=)[^>]*>(.*?)</script>", page):
+        digest = base64.b64encode(hashlib.sha256(m.group(1).encode("utf-8")).digest()).decode()
+        out.append(f"'sha256-{digest}'")
+    return " ".join(dict.fromkeys(out))
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("book")
@@ -88,8 +100,8 @@ def main():
     (build / "book-html.md").write_text(md, encoding="utf-8")
 
     r = subprocess.run(
-        ["pandoc", str(build / "book-html.md"), "-f", "markdown+smart", "-t", "html5",
-         "--section-divs", "--mathml", "--resource-path", str(book.root), *SAFE_MEDIA],
+        ["pandoc", str(build / "book-html.md"), "-f", MARKDOWN, "-t", "html5",
+         "--section-divs", "--mathml", "--resource-path", str(book.root), *safe_media(book)],
         capture_output=True, text=True)
     if r.returncode != 0:
         log(r.stderr)
@@ -110,6 +122,7 @@ def main():
                .replace("{{MODE}}", a.mode)
                .replace("{{BYLINE}}", html.escape(byline))
                .replace("{{CONTENT}}", body))
+    page = page.replace("{{SCRIPT_HASHES}}", script_hashes(page))
     out = Path(a.out) if a.out else book.root / "out" / f"{slugify(meta.get('title', 'book'))}.html"
     out.write_text(page, encoding="utf-8")
 

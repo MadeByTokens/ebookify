@@ -93,21 +93,32 @@ Pull quote (entertain mode; verbatim from the source):
 :::
 ```
 
-Widget: a small self-contained animation or interactive diagram. Raw HTML passes through
-pandoc. The reader page has a strict content security policy: scripts load only inline
-or from cdnjs, jsdelivr and unpkg; images only as `data:`/`blob:`; no fetch/XHR to any
-host. Rules: draw with canvas or inline SVG, inline `<script>`,
+Widget: a small self-contained animation or interactive diagram. **Raw HTML only works
+inside a widget block that carries this book's key**: `::: {.widget key="KEY"}`, where KEY
+is `widget_key` from `book.json`. Everywhere else, raw HTML is shown as plain text,
+because the book's text comes from untrusted sources. (So write formatting in markdown,
+such as `^2^`, `~x~` and `*em*`, never `<sup>` or `<br>`.) The builders strip the key
+from the output.
+
+The reader page has a strict content security policy. Scripts run only if they are
+inline `<script>` blocks in the page (the build hashes each one) or loaded from cdnjs,
+jsdelivr or unpkg. Inline event attributes like `onclick=` never run, so attach handlers
+with `addEventListener`. Images load only as `data:`/`blob:`, and fetch/XHR to any host
+is blocked. Rules: draw with canvas or inline SVG,
 read colors from the CSS variables (`var(--accent)`, `var(--ink)`, `var(--paper)`)
 via `getComputedStyle` so it works in light and dark themes, respect
 `prefers-reduced-motion`, start in a visible, meaningful state (not a blank canvas
 waiting for a click), and keep it under ~80 lines. Give ids a unique prefix.
 
 ```markdown
-::: widget
+::: {.widget key="WIDGET_KEY_FROM_BOOK_JSON"}
 <canvas id="w1-wave" width="640" height="160" aria-label="Sine waves of increasing frequency"></canvas>
 <button type="button" id="w1-play">Pause</button>
 <script>
-(function () { /* draw using getComputedStyle(document.documentElement).getPropertyValue('--accent') */ })();
+(function () {
+  /* draw using getComputedStyle(document.documentElement).getPropertyValue('--accent');
+     document.getElementById("w1-play").addEventListener("click", ...) */
+})();
 </script>
 :::
 ```

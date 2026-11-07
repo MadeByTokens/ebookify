@@ -136,18 +136,31 @@ First benchmark (one run per configuration):
 Everything fetched (page text, PDF text, captions, transcripts, feed URLs) is treated as
 untrusted, because the output may be published:
 
-- Fetchers escape raw HTML and pandoc raw blocks in fetched text, and parse RSS with
+- **Raw HTML.** Both builders run `assets/safe_media.lua` as the first filter, on
+  pandoc's parsed document rather than on markdown text, so parser tricks don't get
+  around it. Raw HTML/LaTeX is shown as plain text unless it is inside a
+  `::: {.widget key="..."}` block whose key matches the random `widget_key` in
+  `book.json`. Only the agent knows that key, so fetched text cannot create live
+  widgets. In-document YAML metadata blocks are disabled, and the key is passed on the
+  command line, which overrides anything in the text.
+- **Embedded files.** Only files directly in `images/` and `data:image` URIs are
+  embedded. Every other image, widget `src`/`srcset`/`poster`, and
+  `<link>`/`<iframe>`/`<object>` tag is removed and reported, before pandoc fetches
+  anything.
+- **Links.** Only http(s), mailto and `#` targets survive; `javascript:`, `file:` and
+  the like keep their text but lose the link.
+- **Network.** URLs taken from content (feed enclosures and transcripts, page and cover
+  images) must be http(s) and public. The address is validated at connect time, inside
+  urllib3, and the connection goes to exactly the address that was checked, so DNS
+  rebinding cannot swap it. Every redirect is checked, and a URL you typed stops being
+  trusted once it redirects to another host. Set `EBOOKIFY_ALLOW_PRIVATE=1` to allow
+  private addresses, for example behind a corporate proxy. RSS is parsed with
   `defusedxml`.
-- URLs taken from content (feed enclosures and transcripts, page and cover images) must
-  be http(s) and resolve to public addresses, checked on every redirect. URLs you type
-  yourself may point at private hosts. Set `EBOOKIFY_ALLOW_PRIVATE=1` to allow private
-  addresses for content URLs too.
-- Both builders run `assets/safe_media.lua` before pandoc fetches anything. It embeds
-  only files directly in `images/` and `data:image` URIs, and removes every other image,
-  raw-HTML `src`/`srcset`/`poster`, and `<link>`/`<iframe>`/`<object>` tag, reporting
-  each one.
-- The HTML reader sets a content security policy: no network requests, images only from
-  `data:`/`blob:`, and scripts only inline or from the artifact CDNs.
+- **Reader page.** A content security policy allows only the page's own hashed inline
+  scripts and the artifact CDNs (no `'unsafe-inline'`), and blocks network requests and
+  remote images.
+- Fetchers also escape raw HTML in fetched text as defense in depth. It only makes
+  drafts read better; the filter above is what enforces safety.
 
 ## Legal
 
