@@ -157,7 +157,8 @@ untrusted, because the output may be published:
   private addresses, for example behind a corporate proxy. RSS is parsed with
   `defusedxml`.
 - **Reader page.** A content security policy allows only the page's own hashed inline
-  scripts and the artifact CDNs (no `'unsafe-inline'`), and blocks network requests and
+  scripts (hashed from the template and keyed widgets only, never from the assembled page)
+  and cdnjs, with no `'unsafe-inline'`, and blocks network requests and
   remote images.
 - Fetchers also escape raw HTML in fetched text as defense in depth. It only makes
   drafts read better; the filter above is what enforces safety.

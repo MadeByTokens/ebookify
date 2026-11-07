@@ -60,6 +60,7 @@ end
 
 -- Pass 1: find trusted widgets and mark their raw HTML.
 local key = ""
+local trusted_out = nil  -- file that receives every trusted widget HTML chunk (for CSP hashes)
 
 local mark = {
   RawBlock = function(el)
@@ -77,7 +78,13 @@ local pass1 = {
     if meta.ebookify_widget_key then
       key = pandoc.utils.stringify(meta.ebookify_widget_key)
     end
+    if meta.ebookify_trusted_out then
+      trusted_out = pandoc.utils.stringify(meta.ebookify_trusted_out)
+      local f = io.open(trusted_out, "w")  -- start empty on every build
+      if f then f:close() end
+    end
     meta.ebookify_widget_key = nil  -- never write the key into the output
+    meta.ebookify_trusted_out = nil
     return meta
   end,
 }
@@ -97,17 +104,25 @@ local pass2 = {
 }
 
 -- Pass 3: neutralize everything that was not marked; enforce media and link rules.
+local function emit_trusted(text)
+  if trusted_out then
+    local f = io.open(trusted_out, "a")
+    if f then f:write(text, "\0"); f:close() end
+  end
+  return text
+end
+
 local pass3 = {
   RawBlock = function(el)
     if el.format == TRUSTED then
-      return pandoc.RawBlock("html", clean_widget_html(el.text))
+      return pandoc.RawBlock("html", emit_trusted(clean_widget_html(el.text)))
     end
     report("raw " .. el.format .. " block (shown as text)", el.text:gsub("%s+", " "))
     return pandoc.CodeBlock(el.text)
   end,
   RawInline = function(el)
     if el.format == TRUSTED then
-      return pandoc.RawInline("html", clean_widget_html(el.text))
+      return pandoc.RawInline("html", emit_trusted(clean_widget_html(el.text)))
     end
     return pandoc.Str(el.text)  -- e.g. "<b>" in fetched prose stays visible, inert
   end,

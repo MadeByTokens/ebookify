@@ -299,7 +299,7 @@ def write_drafts(book: Book, idx: str, title: str, paras, chapters):
         parts, cur, words = [], [], 0
         for p in cps:
             mark = f"[[t={int(p['start'])}]] " if p["start"] is not None else ""
-            spk = f"**{p['speaker']}:** " if p.get("speaker") else ""
+            spk = f"**{neutralize_html(p['speaker'])}:** " if p.get("speaker") else ""
             cur.append(mark + spk + neutralize_html(p["text"]))  # transcript text is untrusted
             words += len(p["text"].split())
             if words >= MAX_WORDS_PER_FILE:

@@ -18,7 +18,7 @@ import textwrap
 import zipfile
 from pathlib import Path
 
-from common import TS_MARKER, Book, fmt_ts, log, slugify, split_code
+from common import TS_MARKER, Book, fmt_ts, log, neutralize_html, slugify, split_code
 
 ASSETS = Path(__file__).resolve().parent.parent / "assets"
 
@@ -54,8 +54,13 @@ def assemble_markdown(book: Book, ts_mode: str) -> str:
 MARKDOWN = "markdown+smart-yaml_metadata_block"
 
 
-def safe_media(book: Book) -> list[str]:
-    return ["-M", f"ebookify_widget_key={book.widget_key()}", "--lua-filter", str(ASSETS / "safe_media.lua")]
+def safe_media(book: Book, trusted_out: Path | None = None) -> list[str]:
+    """Args for the safety filter. trusted_out receives the (cleaned) HTML of keyed
+    widgets, NUL-separated, so build_html can hash exactly those scripts for the CSP."""
+    args = ["-M", f"ebookify_widget_key={book.widget_key()}"]
+    if trusted_out:
+        args += ["-M", f"ebookify_trusted_out={trusted_out}"]
+    return args + ["--lua-filter", str(ASSETS / "safe_media.lua")]
 
 
 def filter_reports(stderr: str) -> list[str]:
@@ -76,6 +81,8 @@ def about_section(book: Book) -> str:
     if notes:
         lines += [notes if isinstance(notes, str) else " ".join(notes), ""]
     for s in sources:
+        # source metadata comes from fetched pages/feeds: escape it like any fetched text
+        s = {k: neutralize_html(v) if isinstance(v, str) else v for k, v in s.items()}
         lines += [f"**{s.get('title') or 'Untitled'}**", ""]
         bits = []
         if s.get("creator"):

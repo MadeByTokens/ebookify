@@ -101,8 +101,8 @@ such as `^2^`, `~x~` and `*em*`, never `<sup>` or `<br>`.) The builders strip th
 from the output.
 
 The reader page has a strict content security policy. Scripts run only if they are
-inline `<script>` blocks in the page (the build hashes each one) or loaded from cdnjs,
-jsdelivr or unpkg. Inline event attributes like `onclick=` never run, so attach handlers
+inline `<script>` blocks in the page (the build hashes each one) or loaded from cdnjs
+(pin an exact version). Inline event attributes like `onclick=` never run, so attach handlers
 with `addEventListener`. Images load only as `data:`/`blob:`, and fetch/XHR to any host
 is blocked. Rules: draw with canvas or inline SVG,
 read colors from the CSS variables (`var(--accent)`, `var(--ink)`, `var(--paper)`)

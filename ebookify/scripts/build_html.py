@@ -66,14 +66,16 @@ def inline_images(fragment: str, root: Path, max_px: int, quality: int) -> tuple
     return out, count
 
 
-def script_hashes(page: str) -> str:
-    """CSP hashes of every inline <script> in the finished page (the reader's own and the
-    agent's keyed widgets). Used instead of 'unsafe-inline' so nothing else can run,
-    including inline event handlers."""
+def script_hashes(*trusted_html: str) -> str:
+    """CSP hashes for inline <script> blocks found in TRUSTED html only: the reader
+    template and the keyed widgets the safety filter wrote out. Never computed over the
+    assembled page, so a script that slipped into the content would still be blocked.
+    Used instead of 'unsafe-inline', which also keeps inline event handlers from running."""
     out = []
-    for m in re.finditer(r"(?is)<script(?![^>]*\ssrc=)[^>]*>(.*?)</script>", page):
-        digest = base64.b64encode(hashlib.sha256(m.group(1).encode("utf-8")).digest()).decode()
-        out.append(f"'sha256-{digest}'")
+    for chunk in trusted_html:
+        for m in re.finditer(r"(?is)<script(?![^>]*\ssrc=)[^>]*>(.*?)</script>", chunk):
+            digest = base64.b64encode(hashlib.sha256(m.group(1).encode("utf-8")).digest()).decode()
+            out.append(f"'sha256-{digest}'")
     return " ".join(dict.fromkeys(out))
 
 
@@ -98,10 +100,12 @@ def main():
     build = book.root / "out" / ".build"
     build.mkdir(parents=True, exist_ok=True)
     (build / "book-html.md").write_text(md, encoding="utf-8")
+    trusted_out = build / "trusted-widgets.html"
 
     r = subprocess.run(
         ["pandoc", str(build / "book-html.md"), "-f", MARKDOWN, "-t", "html5",
-         "--section-divs", "--mathml", "--resource-path", str(book.root), *safe_media(book)],
+         "--section-divs", "--mathml", "--resource-path", str(book.root),
+         *safe_media(book, trusted_out)],
         capture_output=True, text=True)
     if r.returncode != 0:
         log(r.stderr)
@@ -117,12 +121,13 @@ def main():
     byline = " · ".join(x for x in [meta.get("author"),
                                     ", ".join(sorted({s.get("type", "") for s in book.sources()}))] if x)
     tpl = (ASSETS / "reader_template.html").read_text(encoding="utf-8")
+    widgets = trusted_out.read_text(encoding="utf-8").split("\0") if trusted_out.exists() else []
+    tpl = tpl.replace("{{SCRIPT_HASHES}}", script_hashes(tpl, *widgets))  # before content is merged in
     page = (tpl.replace("{{TITLE}}", html.escape(meta.get("title") or "Untitled"))
                .replace("{{LANG}}", html.escape(meta.get("language") or "en"))
                .replace("{{MODE}}", a.mode)
                .replace("{{BYLINE}}", html.escape(byline))
                .replace("{{CONTENT}}", body))
-    page = page.replace("{{SCRIPT_HASHES}}", script_hashes(page))
     out = Path(a.out) if a.out else book.root / "out" / f"{slugify(meta.get('title', 'book'))}.html"
     out.write_text(page, encoding="utf-8")
 
