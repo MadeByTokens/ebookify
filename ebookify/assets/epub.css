@@ -1,0 +1,31 @@
+/* Deliberately light: e-readers apply the reader's own font, size and theme.
+   Only structure and a few semantic blocks are styled here. */
+body { line-height: 1.5; widows: 2; orphans: 2; hyphens: auto; -webkit-hyphens: auto; }
+h1, h2, h3 { line-height: 1.2; page-break-after: avoid; hyphens: none; -webkit-hyphens: none; }
+h1 { margin: 1.5em 0 0.8em; }
+h2 { margin: 1.6em 0 0.6em; }
+p { margin: 0 0 0.8em; text-indent: 0; }
+img { max-width: 100%; height: auto; }
+figure { margin: 1em 0; text-align: center; page-break-inside: avoid; }
+figcaption { font-size: 0.85em; font-style: italic; }
+blockquote { margin: 1em 1.5em; font-style: italic; }
+pre, code { font-family: monospace; font-size: 0.85em; }
+pre { white-space: pre-wrap; word-wrap: break-word; }
+table { border-collapse: collapse; margin: 1em 0; font-size: 0.9em; }
+th, td { border: 1px solid #888; padding: 0.25em 0.5em; }
+
+/* transcript timestamps */
+.ts { font-size: 0.7em; color: #777; text-decoration: none; margin-right: 0.4em;
+      font-family: sans-serif; vertical-align: 0.15em; }
+a.ts { color: #777; }
+
+/* study blocks, only present when built with --keep-extras */
+.keyidea, .note, .summary, .steps, .tip, .pull {
+  border-left: 3px solid #888; padding: 0.2em 0 0.2em 0.9em; margin: 1.2em 0; page-break-inside: avoid; }
+.keyidea::before { content: "Key idea"; font-weight: bold; display: block; }
+.summary::before { content: "Summary"; font-weight: bold; display: block; }
+.tip::before { content: "Tip"; font-weight: bold; display: block; }
+.pull { font-style: italic; font-size: 1.1em; }
+
+.about { page-break-before: always; }
+.about p { font-size: 0.9em; }

@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="{{LANG}}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{TITLE}}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&family=Instrument+Sans:wght@400;600&display=swap" rel="stylesheet">
+<style>
+/* Layout idea: a single reading column (~65ch) with a slim tool bar and a contents drawer;
+   "slides" mode turns every second-level section into one full screen. */
+:root {
+  --paper: #f5f6f3;
+  --ink: #1c2226;
+  --muted: #5d6870;
+  --rule: #d9ddd8;
+  --accent: #2a5d8f;
+  --accent-soft: #e3ecf5;
+  --good: #2e7d4f;
+  --bad: #b3412e;
+  --font-body: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --font-ui: "Instrument Sans", "Segoe UI", system-ui, sans-serif;
+  --size: 1.1rem;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #15191c; --ink: #dfe4e6; --muted: #98a3aa; --rule: #2c3337;
+    --accent: #84b6e0; --accent-soft: #1f2d3a; --good: #6cc191; --bad: #e98b78;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #15191c; --ink: #dfe4e6; --muted: #98a3aa; --rule: #2c3337;
+  --accent: #84b6e0; --accent-soft: #1f2d3a; --good: #6cc191; --bad: #e98b78;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--paper); color: var(--ink); font-family: var(--font-body);
+  font-size: var(--size); line-height: 1.62; }
+a { color: var(--accent); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* top bar */
+.bar { position: sticky; top: 0; z-index: 10; display: flex; align-items: center; gap: 8px;
+  padding: 8px 16px; background: var(--paper); border-bottom: 1px solid var(--rule);
+  font-family: var(--font-ui); font-size: 0.85rem; }
+.bar .t { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--muted); }
+.bar button { font: inherit; color: var(--ink); background: transparent; border: 1px solid var(--rule);
+  border-radius: 6px; padding: 4px 10px; cursor: pointer; }
+.bar button[aria-pressed="true"], .bar button.primary { background: var(--accent-soft); border-color: var(--accent); }
+.progress { position: absolute; left: 0; bottom: -1px; height: 2px; background: var(--accent); width: 0; }
+.score { color: var(--muted); }
+
+/* contents drawer */
+nav#toc { position: fixed; top: 0; left: 0; bottom: 0; width: min(320px, 85vw); overflow-y: auto;
+  background: var(--paper); border-right: 1px solid var(--rule); padding: 64px 16px 24px; z-index: 9;
+  transform: translateX(-102%); transition: transform .2s ease; font-family: var(--font-ui); font-size: 0.9rem; }
+nav#toc.open { transform: none; }
+nav#toc ol { list-style: none; margin: 0; padding: 0; }
+nav#toc li { margin: 2px 0; }
+nav#toc li.l2 { padding-left: 14px; }
+nav#toc a { display: block; padding: 4px 8px; border-radius: 4px; color: var(--ink); text-decoration: none; }
+nav#toc a.here { background: var(--accent-soft); color: var(--accent); }
+
+/* reading column */
+main { max-width: 68ch; margin: 0 auto; padding: 32px 16px 120px; }
+.cover { padding: 24px 0 8px; border-bottom: 1px solid var(--rule); margin-bottom: 24px; }
+.cover h1 { font-size: 2.2rem; line-height: 1.15; margin: 0 0 8px; text-wrap: balance; }
+.cover p { margin: 0; color: var(--muted); font-family: var(--font-ui); }
+main h1, main h2, main h3 { line-height: 1.2; text-wrap: balance; }
+main h1 { font-size: 1.9rem; margin: 2.2em 0 0.6em; }
+main h2 { font-size: 1.4rem; margin: 1.8em 0 0.5em; }
+main h3 { font-size: 1.15rem; }
+img { max-width: 100%; height: auto; }
+figure { margin: 1.5em 0; }
+figcaption { font-size: 0.85em; color: var(--muted); }
+blockquote { margin: 1.2em 0; padding-left: 1em; border-left: 3px solid var(--rule); color: var(--muted); }
+pre { overflow-x: auto; background: var(--accent-soft); padding: 12px; border-radius: 6px; font-size: 0.85em; }
+table { display: block; overflow-x: auto; border-collapse: collapse; font-size: 0.9em; }
+th, td { border: 1px solid var(--rule); padding: 4px 8px; font-variant-numeric: tabular-nums; }
+.ts { font-family: var(--font-ui); font-size: 0.72em; color: var(--muted); text-decoration: none;
+  margin-right: 6px; padding: 1px 5px; border: 1px solid var(--rule); border-radius: 4px;
+  vertical-align: 0.12em; font-variant-numeric: tabular-nums; }
+a.ts:hover { color: var(--accent); border-color: var(--accent); }
+
+/* entertaining mode: a little more air and a drop cap */
+body[data-mode="entertain"] main { font-size: 1.06em; line-height: 1.7; }
+body[data-mode="entertain"] section.level2 > p:first-of-type::first-letter,
+body[data-mode="entertain"] section.level1 > p:first-of-type::first-letter {
+  float: left; font-size: 3.1em; line-height: 0.85; padding: 6px 8px 0 0; color: var(--accent); font-weight: 600; }
+.pull { font-size: 1.35em; line-height: 1.35; font-style: italic; color: var(--accent);
+  border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); padding: 14px 0; margin: 1.6em 0; }
+
+/* learning blocks */
+.keyidea, .summary, .tip, .note { border-left: 3px solid var(--accent); background: var(--accent-soft);
+  padding: 12px 16px; margin: 1.4em 0; border-radius: 0 6px 6px 0; }
+.keyidea::before, .summary::before, .tip::before { display: block; font-family: var(--font-ui);
+  font-size: 0.75rem; letter-spacing: .06em; text-transform: uppercase; color: var(--accent); margin-bottom: 4px; }
+.keyidea::before { content: "Key idea"; }
+.summary::before { content: "Summary"; }
+.tip::before { content: "Tip"; }
+.keyidea > :last-child, .summary > :last-child, .note > :last-child { margin-bottom: 0; }
+
+.quiz { border: 1px solid var(--rule); border-radius: 8px; padding: 14px 16px; margin: 1.6em 0; }
+.quiz::before { content: "Check yourself"; display: block; font-family: var(--font-ui); font-size: 0.75rem;
+  letter-spacing: .06em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+.quiz ol { list-style: none; padding: 0; margin: 8px 0 0; display: grid; gap: 6px; }
+.quiz li button { width: 100%; text-align: left; font: inherit; font-size: 0.95em; color: var(--ink);
+  background: transparent; border: 1px solid var(--rule); border-radius: 6px; padding: 8px 12px; cursor: pointer; }
+.quiz li button:hover { border-color: var(--accent); }
+.quiz li.right button { border-color: var(--good); color: var(--good); }
+.quiz li.wrong button { border-color: var(--bad); color: var(--bad); text-decoration: line-through; }
+.quiz .explain { display: none; margin-top: 10px; font-size: 0.95em; color: var(--muted); }
+.quiz.done .explain { display: block; }
+
+.flashcards dl { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; margin: 1em 0; }
+.card { perspective: 800px; min-height: 120px; cursor: pointer; border: 0; padding: 0; background: none; font: inherit; color: inherit; }
+.card .in { position: relative; width: 100%; height: 100%; min-height: 120px; transition: transform .35s; transform-style: preserve-3d; }
+.card.flip .in { transform: rotateY(180deg); }
+.card .f, .card .b { position: absolute; inset: 0; backface-visibility: hidden; border: 1px solid var(--rule);
+  border-radius: 8px; padding: 12px; display: flex; align-items: center; justify-content: center; text-align: center;
+  background: var(--paper); overflow: auto; }
+.card .f { font-weight: 600; }
+.card .b { transform: rotateY(180deg); font-size: 0.9em; background: var(--accent-soft); }
+
+.steps ol li { margin: 6px 0; transition: opacity .2s; }
+.steps.walking ol li.later { opacity: 0.15; }
+.steps .ctl { display: flex; gap: 8px; font-family: var(--font-ui); font-size: 0.85rem; }
+.steps .ctl button, .widget button { font: inherit; border: 1px solid var(--rule); background: transparent; color: var(--ink); border-radius: 6px; padding: 4px 10px; cursor: pointer; }
+.widget { margin: 1.6em 0; border: 1px solid var(--rule); border-radius: 8px; padding: 12px; overflow-x: auto; }
+.widget canvas, .widget svg { max-width: 100%; display: block; margin: 0 auto; }
+.notes { display: none; }
+
+/* slides */
+body.slides main { max-width: none; padding: 0; }
+body.slides main > :not(section), body.slides main section.slide-off,
+body.slides section.slide-parent > :not(section) { display: none; }
+body.slides section.slide-parent { padding: 0; margin: 0; }
+body.slides section.slide-on { min-height: calc(100vh - 48px); max-width: 60rem; margin: 0 auto;
+  padding: 5vh 6vw 80px; font-size: 1.35em; }
+body.slides section.slide-on h1, body.slides section.slide-on h2 { font-size: 1.8em; }
+body.slides section.slide-on > h2:first-child, body.slides section.slide-on > h1:first-child { margin-top: 0; }
+body.slides.shownotes .slide-on .notes { display: block; position: fixed; right: 16px; bottom: 56px; width: min(420px, 90vw);
+  max-height: 40vh; overflow: auto; background: var(--paper); border: 1px solid var(--accent); border-radius: 8px;
+  padding: 12px; font-size: 0.8rem; font-family: var(--font-ui); }
+.slidenav { display: none; position: fixed; bottom: 12px; left: 50%; transform: translateX(-50%); gap: 8px;
+  align-items: center; font-family: var(--font-ui); font-size: 0.85rem; background: var(--paper);
+  border: 1px solid var(--rule); border-radius: 999px; padding: 4px 8px; z-index: 11; }
+body.slides .slidenav { display: flex; }
+.slidenav button { font: inherit; border: 0; background: transparent; color: var(--ink); padding: 4px 10px; cursor: pointer; }
+
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+@media (max-width: 420px) { main h1 { font-size: 1.6rem; } .cover h1 { font-size: 1.8rem; } }
+</style>
+</head>
+<body data-mode="{{MODE}}">
+<div class="bar">
+  <button id="tocBtn" aria-expanded="false" aria-controls="toc">Contents</button>
+  <span class="t">{{TITLE}}</span>
+  <span class="score" id="score" hidden></span>
+  <button id="fontBtn" title="Change text size">Text size</button>
+  <button id="slideBtn" aria-pressed="false">Slides</button>
+  <div class="progress" id="progress"></div>
+</div>
+<nav id="toc" aria-label="Contents"><ol id="tocList"></ol></nav>
+<main id="book">
+<header class="cover">
+  <h1>{{TITLE}}</h1>
+  <p>{{BYLINE}}</p>
+</header>
+{{CONTENT}}
+</main>
+<div class="slidenav" role="toolbar" aria-label="Slide controls">
+  <button id="prevS" aria-label="Previous slide">&larr;</button>
+  <span id="slideNo"></span>
+  <button id="nextS" aria-label="Next slide">&rarr;</button>
+  <button id="notesS" aria-pressed="false">Notes</button>
+  <button id="exitS">Exit</button>
+</div>
+<script>
+(function () {
+  "use strict";
+  var store = {
+    get: function (k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
+    set: function (k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+  };
+  var KEY = "ebookify:" + document.title;
+  var main = document.getElementById("book");
+
+  /* ---------- contents ---------- */
+  var heads = Array.prototype.slice.call(main.querySelectorAll("section > h1, section > h2"));
+  var list = document.getElementById("tocList");
+  heads.forEach(function (h) {
+    if (!h.id && h.parentElement.id) h.id = h.parentElement.id + "-h";
+    var li = document.createElement("li");
+    li.className = h.tagName === "H1" ? "l1" : "l2";
+    var a = document.createElement("a");
+    a.href = "#" + (h.parentElement.id || h.id);
+    a.textContent = h.textContent;
+    li.appendChild(a);
+    list.appendChild(li);
+  });
+  var toc = document.getElementById("toc"), tocBtn = document.getElementById("tocBtn");
+  function setToc(open) { toc.classList.toggle("open", open); tocBtn.setAttribute("aria-expanded", open); }
+  tocBtn.addEventListener("click", function () { setToc(!toc.classList.contains("open")); });
+  toc.addEventListener("click", function (e) {
+    if (e.target.tagName === "A") { setToc(false); if (document.body.classList.contains("slides")) {
+      var t = document.getElementById(e.target.getAttribute("href").slice(1)); var i = slides.indexOf(slideOf(t)); if (i >= 0) { e.preventDefault(); show(i); } } }
+  });
+
+  /* ---------- progress + position ---------- */
+  var bar = document.getElementById("progress"), links = list.querySelectorAll("a");
+  function onScroll() {
+    var max = document.documentElement.scrollHeight - innerHeight;
+    bar.style.width = (max > 0 ? (scrollY / max) * 100 : 0) + "%";
+    var cur = 0;
+    heads.forEach(function (h, i) { if (h.getBoundingClientRect().top < 120) cur = i; });
+    links.forEach(function (a, i) { a.classList.toggle("here", i === cur); });
+    if (!document.body.classList.contains("slides")) store.set(KEY + ":y", String(Math.round(scrollY)));
+  }
+  addEventListener("scroll", onScroll, { passive: true });
+  var y = parseInt(store.get(KEY + ":y") || "0", 10);
+  if (!location.hash && y > 0) requestAnimationFrame(function () { scrollTo(0, y); });
+
+  /* ---------- text size ---------- */
+  var sizes = ["1rem", "1.1rem", "1.22rem", "1.36rem"], si = sizes.indexOf(store.get(KEY + ":size") || "1.1rem");
+  if (si < 0) si = 1;
+  function applySize() { document.documentElement.style.setProperty("--size", sizes[si]); }
+  applySize();
+  document.getElementById("fontBtn").addEventListener("click", function () {
+    si = (si + 1) % sizes.length; applySize(); store.set(KEY + ":size", sizes[si]);
+  });
+
+  /* ---------- quizzes ---------- */
+  var quizzes = main.querySelectorAll(".quiz"), answered = 0, right = 0, score = document.getElementById("score");
+  function updateScore() {
+    if (!quizzes.length) return;
+    score.hidden = false;
+    score.textContent = right + "/" + quizzes.length + " correct";
+  }
+  quizzes.forEach(function (q) {
+    var ans = parseInt(q.getAttribute("data-answer") || "0", 10);
+    var ol = q.querySelector("ol");
+    if (!ol) return;
+    var items = Array.prototype.slice.call(ol.children);
+    items.forEach(function (li, i) {
+      var b = document.createElement("button");
+      b.type = "button";
+      while (li.firstChild) b.appendChild(li.firstChild);
+      li.appendChild(b);
+      b.addEventListener("click", function () {
+        if (q.classList.contains("done")) return;
+        q.classList.add("done");
+        answered++;
+        if (i + 1 === ans) { li.classList.add("right"); right++; }
+        else { li.classList.add("wrong"); if (items[ans - 1]) items[ans - 1].classList.add("right"); }
+        updateScore();
+      });
+    });
+  });
+  if (document.body.getAttribute("data-mode") === "learn") updateScore();
+
+  /* ---------- flashcards ---------- */
+  main.querySelectorAll(".flashcards dl").forEach(function (dl) {
+    var dts = Array.prototype.slice.call(dl.querySelectorAll("dt"));
+    var cards = dts.map(function (dt) {
+      var dd = dt.nextElementSibling;
+      var c = document.createElement("button");
+      c.type = "button"; c.className = "card"; c.setAttribute("aria-label", "Flashcard: " + dt.textContent + ". Press to flip.");
+      c.innerHTML = '<div class="in"><div class="f"></div><div class="b"></div></div>';
+      c.querySelector(".f").innerHTML = dt.innerHTML;
+      c.querySelector(".b").innerHTML = dd ? dd.innerHTML : "";
+      c.addEventListener("click", function () { c.classList.toggle("flip"); });
+      return c;
+    });
+    dl.innerHTML = "";
+    cards.forEach(function (c) { dl.appendChild(c); });
+  });
+
+  /* ---------- step-by-step ---------- */
+  main.querySelectorAll(".steps").forEach(function (s) {
+    var lis = s.querySelectorAll("ol > li");
+    if (!lis.length) return;
+    var ctl = document.createElement("div"); ctl.className = "ctl";
+    ctl.innerHTML = '<button type="button" data-a="walk">Walk through step by step</button>';
+    s.insertBefore(ctl, s.firstChild);
+    var n = 0;
+    function paint() { lis.forEach(function (li, i) { li.classList.toggle("later", i > n); }); }
+    ctl.addEventListener("click", function (e) {
+      var a = e.target.getAttribute("data-a");
+      if (a === "walk") { s.classList.add("walking"); n = 0; paint();
+        ctl.innerHTML = '<button type="button" data-a="next">Next step</button><button type="button" data-a="all">Show all</button>'; }
+      if (a === "next") { n = Math.min(n + 1, lis.length - 1); paint(); }
+      if (a === "all") { s.classList.remove("walking");
+        ctl.innerHTML = '<button type="button" data-a="walk">Walk through step by step</button>'; }
+    });
+  });
+
+  /* ---------- slides ---------- */
+  // A slide = every level-2 section, plus a level-1 section when it has its own intro text
+  // (or no level-2 children). Ancestors of the current slide only act as containers.
+  var slides = [];
+  main.querySelectorAll("section.level1, section.level2").forEach(function (s) {
+    if (s.classList.contains("level2")) { slides.push(s); return; }
+    var own = Array.prototype.some.call(s.children, function (c) { return c.tagName !== "SECTION" && c.tagName !== "H1"; });
+    var subs = s.querySelector("section.level2");
+    if (own || !subs) slides.push(s);
+  });
+  var cur = 0, slideBtn = document.getElementById("slideBtn");
+  function slideOf(el) { while (el && slides.indexOf(el) < 0) el = el.parentElement; return el; }
+  function show(i) {
+    cur = Math.max(0, Math.min(slides.length - 1, i));
+    var s = slides[cur];
+    main.querySelectorAll("section").forEach(function (x) {
+      x.classList.remove("slide-on", "slide-parent");
+      x.classList.toggle("slide-off", slideOf(x) !== s);
+    });
+    s.classList.add("slide-on");
+    for (var p = s.parentElement; p && p !== main; p = p.parentElement) {
+      if (p.tagName === "SECTION") { p.classList.add("slide-parent"); p.classList.remove("slide-off"); }
+    }
+    document.getElementById("slideNo").textContent = (cur + 1) + " / " + slides.length;
+    scrollTo(0, 0);
+  }
+  function setSlides(on) {
+    document.body.classList.toggle("slides", on);
+    slideBtn.setAttribute("aria-pressed", on);
+    if (on) show(cur); else {
+      main.querySelectorAll("section").forEach(function (s) { s.classList.remove("slide-on", "slide-off", "slide-parent"); });
+      slides[cur] && slides[cur].scrollIntoView();
+    }
+  }
+  slideBtn.addEventListener("click", function () {
+    if (!slides.length) return;
+    if (!document.body.classList.contains("slides")) {
+      var vis = slides.findIndex(function (s) { return s.getBoundingClientRect().bottom > 80; });
+      cur = vis < 0 ? 0 : vis;
+    }
+    setSlides(!document.body.classList.contains("slides"));
+  });
+  if (document.body.getAttribute("data-mode") === "teach") slideBtn.classList.add("primary");
+  document.getElementById("prevS").addEventListener("click", function () { show(cur - 1); });
+  document.getElementById("nextS").addEventListener("click", function () { show(cur + 1); });
+  document.getElementById("exitS").addEventListener("click", function () { setSlides(false); });
+  document.getElementById("notesS").addEventListener("click", function (e) {
+    var on = document.body.classList.toggle("shownotes"); e.currentTarget.setAttribute("aria-pressed", on);
+  });
+  addEventListener("keydown", function (e) {
+    if (!document.body.classList.contains("slides")) return;
+    if (["ArrowRight", "PageDown", " "].indexOf(e.key) >= 0) { e.preventDefault(); show(cur + 1); }
+    if (["ArrowLeft", "PageUp"].indexOf(e.key) >= 0) { e.preventDefault(); show(cur - 1); }
+    if (e.key === "Escape") setSlides(false);
+    if (e.key === "n" || e.key === "N") document.getElementById("notesS").click();
+  });
+  onScroll();
+})();
+</script>
+</body>
+</html>

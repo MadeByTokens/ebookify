@@ -1,0 +1,9 @@
+trafilatura>=2.0
+pymupdf>=1.24
+pymupdf4llm>=0.0.17
+faster-whisper>=1.1
+av<16  # faster-whisper 1.2 passes metadata_errors, removed in PyAV 16+
+pillow>=10.0
+requests>=2.31
+yt-dlp
+defusedxml>=0.7

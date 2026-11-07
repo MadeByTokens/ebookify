@@ -1,0 +1,4 @@
+schema_version: "1.1"
+name: web-article-epub-and-learn-html
+expected_outcome: |
+  An EPUB of the article with clean headings, the post's code blocks preserved, and an About/source page; plus a self-contained HTML study edition with key ideas, quizzes and flashcards grounded in the article.

@@ -1,0 +1,4 @@
+schema_version: "1.1"
+name: podcast-episode-whisper-epub
+expected_outcome: |
+  The episode is found in the feed, transcribed (no publisher transcript) with Whisper, cleaned with speaker labels where clear and sponsor reads removed, and built into an EPUB with source attribution.

@@ -1,0 +1,4 @@
+schema_version: "1.1"
+name: youtube-video-to-epub
+expected_outcome: |
+  An EPUB with the video's chapters as sections, transcript cleaned into readable paragraphs in the speaker's words, timestamps optional, a cover and source attribution.
