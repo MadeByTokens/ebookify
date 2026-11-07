@@ -131,6 +131,24 @@ First benchmark (one run per configuration):
   HTML).
 - pandoc 2.9 renders `\mathrm{}` in MathML as italics in Chromium.
 
+## Security
+
+Everything fetched (page text, PDF text, captions, transcripts, feed URLs) is treated as
+untrusted, because the output may be published:
+
+- Fetchers escape raw HTML and pandoc raw blocks in fetched text, and parse RSS with
+  `defusedxml`.
+- URLs taken from content (feed enclosures and transcripts, page and cover images) must
+  be http(s) and resolve to public addresses, checked on every redirect. URLs you type
+  yourself may point at private hosts. Set `EBOOKIFY_ALLOW_PRIVATE=1` to allow private
+  addresses for content URLs too.
+- Both builders run `assets/safe_media.lua` before pandoc fetches anything. It embeds
+  only files directly in `images/` and `data:image` URIs, and removes every other image,
+  raw-HTML `src`/`srcset`/`poster`, and `<link>`/`<iframe>`/`<object>` tag, reporting
+  each one.
+- The HTML reader sets a content security policy: no network requests, images only from
+  `data:`/`blob:`, and scripts only inline or from the artifact CDNs.
+
 ## Legal
 
 The skill makes personal reading copies. Copyright stays with the original authors.

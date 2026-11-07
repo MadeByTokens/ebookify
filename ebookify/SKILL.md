@@ -100,6 +100,12 @@ name**. The builders use `chapters/` whenever it has files.
 Heading convention: each source starts with one `# Title`, and its sections use `##`.
 The builders split the EPUB into chapters on that basis.
 
+Images: reference only files in `images/` (as `images/<name>`). For safety the
+builders remove any other image or raw-HTML `src`: paths outside `images/`, absolute
+paths, and remote URLs. They list each removal as a problem. The fetched text is
+untrusted: fetchers escape raw HTML in it, so never paste raw HTML from a source back
+into a chapter.
+
 Then update `book.json`: a real `title` (for a single source, its title; for a
 collection, a name that describes the set), `author`, `language` (ISO code) and a
 one-sentence `description`. The fetchers fill it from the first source, which is

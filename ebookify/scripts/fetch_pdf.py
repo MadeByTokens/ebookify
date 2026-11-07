@@ -21,7 +21,7 @@ from pathlib import Path
 import pymupdf
 import pymupdf4llm
 
-from common import Book, download, first_heading, log, shift_headings, slugify, tidy_markdown
+from common import Book, download, first_heading, log, neutralize_html, shift_headings, slugify, tidy_markdown
 
 SCANNED_CHARS_PER_PAGE = 200
 
@@ -110,7 +110,7 @@ def main():
     if src.startswith(("http://", "https://")):
         from urllib.parse import urlparse
         pdf = raw / ((Path(urlparse(src).path).name or "source").removesuffix(".pdf") + ".pdf")
-        if not download(src, pdf, timeout=180):
+        if not download(src, pdf, timeout=180, trusted=True):  # URL typed by the user
             raise SystemExit("could not download PDF")
     else:
         pdf = Path(src).resolve()
@@ -151,8 +151,8 @@ def main():
             f.rename(new)
             md = md.replace(f"images/{f.name}", f"images/{new.name}")
 
-    md = re.sub(r"\n{3,}", "\n\n", md)
     md = re.sub(r"(?m)^-{5,}\s*$", "", md)  # page separators
+    md = re.sub(r"\n{3,}", "\n\n", neutralize_html(md))  # PDF text is untrusted
     if not title:
         title = first_heading(md) or pdf.stem.replace("_", " ")
     words = len(md.split())

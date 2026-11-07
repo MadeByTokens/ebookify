@@ -21,8 +21,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-from build_epub import about_section, assemble_markdown
-from common import Book, guess_mime, log, slugify
+from build_epub import SAFE_MEDIA, about_section, assemble_markdown, filter_reports
+from common import Book, log, safe_image_path, slugify
 
 ASSETS = Path(__file__).resolve().parent.parent / "assets"
 MAX_BYTES = 16 * 1024 * 1024  # Claude artifact limit
@@ -35,12 +35,12 @@ def inline_images(fragment: str, root: Path, max_px: int, quality: int) -> tuple
     def repl(m):
         nonlocal count
         src = html.unescape(m.group(2))
-        if src.startswith(("data:", "http://", "https://")):
+        if re.match(r"data:image/(png|jpe?g|gif|webp);", src):
             return m.group(0)
-        p = (root / src).resolve()
-        if not p.exists():
-            log(f"  ! image not found: {src}")
-            return m.group(0)
+        p = safe_image_path(root, src)  # never inline anything outside BOOK/images/
+        if p is None:
+            log(f"  ! image refused or missing: {src[:120]}")
+            return m.group(1) + m.group(3)  # empty src
         if p.suffix.lower() == ".svg":
             data, mime = p.read_bytes(), "image/svg+xml"
         else:
@@ -55,8 +55,9 @@ def inline_images(fragment: str, root: Path, max_px: int, quality: int) -> tuple
                         im.convert("RGB").save(buf, "JPEG", quality=quality, optimize=True)
                         mime = "image/jpeg"
                     data = buf.getvalue()
-            except Exception:  # noqa: BLE001
-                data, mime = p.read_bytes(), guess_mime(p)
+            except Exception:  # noqa: BLE001  not a readable image: do not embed it
+                log(f"  ! not a valid image, skipped: {src[:120]}")
+                return m.group(1) + m.group(3)
         count += 1
         return f'{m.group(1)}data:{mime};base64,{base64.b64encode(data).decode()}{m.group(3)}'
 
@@ -88,7 +89,7 @@ def main():
 
     r = subprocess.run(
         ["pandoc", str(build / "book-html.md"), "-f", "markdown+smart", "-t", "html5",
-         "--section-divs", "--mathml", "--resource-path", str(book.root)],
+         "--section-divs", "--mathml", "--resource-path", str(book.root), *SAFE_MEDIA],
         capture_output=True, text=True)
     if r.returncode != 0:
         log(r.stderr)
@@ -113,18 +114,15 @@ def main():
     out.write_text(page, encoding="utf-8")
 
     size = out.stat().st_size
-    problems = []
+    problems = filter_reports(r.stderr)
     if size > MAX_BYTES:
         problems.append(f"{size/1e6:.1f} MB exceeds the 16 MiB artifact limit: fine as a local file, "
                         "too big to publish as an artifact (drop or shrink images)")
     if "[[t=" in page:
         problems.append("unrendered [[t=..]] markers")
-    remote = re.findall(r'<img[^>]*\ssrc="(https?://[^"]+)"', body)
-    if remote:
-        problems.append(f"{len(remote)} remote image(s) will not load in an artifact or offline: {remote[:3]}")
-    missing = re.findall(r'<img[^>]*\ssrc="(images/[^"]+)"', body)
-    if missing:
-        problems.append(f"{len(missing)} image file(s) not found: {missing[:3]}")
+    dropped = len(re.findall(r'<img[^>]*\ssrc=""', body))
+    if dropped:
+        problems.append(f"{dropped} image(s) not embedded: missing, not an image, remote, or outside images/")
     if book.uncleaned_drafts():
         log(f"warning: draft files not in chapters/ (left out of the book): {book.uncleaned_drafts()}")
     kinds = ("quiz", "flashcards", "steps", "keyidea", "summary", "notes", "widget", "pull")

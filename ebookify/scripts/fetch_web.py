@@ -17,7 +17,7 @@ from pathlib import Path
 import trafilatura
 from trafilatura.settings import use_config
 
-from common import UA, Book, localize_images, log, shift_headings, slugify, tidy_markdown, write_json
+from common import UA, Book, localize_images, log, neutralize_html, shift_headings, slugify, tidy_markdown, write_json
 
 MIN_WORDS = 150  # below this the extraction probably failed (paywall, JS app, cookie wall)
 
@@ -54,13 +54,13 @@ def extract(book: Book, html: str, url: str) -> dict:
     cover_url = meta.image if meta and getattr(meta, "image", None) else None
 
     md = localize_images(md, url, book.root / "images", f"{idx}")
-    md = shift_headings(tidy_markdown(md, title, url), top=2)
+    md = neutralize_html(shift_headings(tidy_markdown(md, title, url), top=2))
     words = len(md.split())
 
     byline = " · ".join(dict.fromkeys(x for x in [author, site, date] if x))
-    head = f"# {title}\n\n"
+    head = f"# {neutralize_html(title)}\n\n"
     if byline:
-        head += f"*{byline}*\n\n"
+        head += f"*{neutralize_html(byline)}*\n\n"
     head += f"*Source: <{url}>*\n\n"
     name = f"{idx}-{slugify(title)}.md"
     book.write_draft(name, head + md)

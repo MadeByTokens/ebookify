@@ -44,9 +44,17 @@ def assemble_markdown(book: Book, ts_mode: str) -> str:
     for f in book.content_files():
         idx = f.name.split("-", 1)[0]
         src = book.source(idx)
-        text = f.read_text(encoding="utf-8")
-        parts.append(render_timestamps(text, src.get("timestamp_url"), ts_mode))
+        parts.append(render_timestamps(f.read_text(encoding="utf-8"), src.get("timestamp_url"), ts_mode))
     return "\n\n".join(parts)
+
+
+# Always the first filter: only images/ files and data:image URIs may be embedded
+# (book text is untrusted and pandoc fetches whatever an image points to).
+SAFE_MEDIA = ["--lua-filter", str(ASSETS / "safe_media.lua")]
+
+
+def filter_reports(stderr: str) -> list[str]:
+    return [line.split("] ", 1)[1] for line in stderr.splitlines() if line.startswith("[ebookify] removed")]
 
 
 def about_section(book: Book) -> str:
@@ -213,7 +221,7 @@ def main():
     out = Path(a.out) if a.out else book.root / "out" / f"{slugify(meta.get('title', 'book'))}.epub"
     cmd = ["pandoc", str(build / "book.md"), "-f", "markdown+smart", "-t", "epub3", "-o", str(out),
            "--toc", "--toc-depth=2", f"--epub-chapter-level={chapter_level}",
-           "--css", str(ASSETS / "epub.css"), "--epub-cover-image", str(cover_path),
+           *SAFE_MEDIA, "--css", str(ASSETS / "epub.css"), "--epub-cover-image", str(cover_path),
            "--metadata-file", str(meta_yaml), "--resource-path", str(book.root), "--mathml",
            "--metadata", f"title={meta.get('title')}"]
     cmd += ["--lua-filter", str(ASSETS / ("strip_interactive.lua" if a.keep_extras else "strip_extras.lua"))]
@@ -221,8 +229,9 @@ def main():
     if r.returncode != 0:
         log(r.stderr)
         raise SystemExit("pandoc failed")
-    warnings = [w for w in r.stderr.splitlines() if w.strip()]
+    warnings = [w for w in r.stderr.splitlines() if w.strip() and not w.startswith("[ebookify]")]
     report = validate(out, warnings)
+    report["problems"] += filter_reports(r.stderr)
     report["chapter_split_level"] = int(chapter_level)
     if book.uncleaned_drafts():  # a warning, not a problem: dropping a draft can be deliberate
         report["warning"] = f"draft files not in chapters/ (left out of the book): {book.uncleaned_drafts()}"

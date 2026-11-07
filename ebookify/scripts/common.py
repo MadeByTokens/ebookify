@@ -15,9 +15,12 @@ from __future__ import annotations
 
 import datetime as _dt
 import hashlib
+import ipaddress
 import json
 import mimetypes
+import os
 import re
+import socket
 import sys
 import unicodedata
 from pathlib import Path
@@ -168,21 +171,89 @@ class Book:
 
 
 # --- images ------------------------------------------------------------------
-def download(url: str, dest: Path, timeout: int = 60) -> Path | None:
+def check_url(url: str, trusted: bool = False) -> None:
+    """Raise ValueError unless url is http(s) and, for untrusted URLs (taken from fetched
+    content: feeds, pages, transcripts), resolves only to public addresses. Blocks
+    content from steering requests at localhost, the LAN or cloud metadata endpoints.
+    Set EBOOKIFY_ALLOW_PRIVATE=1 to allow private addresses."""
+    u = urlparse(url)
+    if u.scheme not in ("http", "https") or not u.hostname:
+        raise ValueError(f"refusing non-http(s) URL: {url[:100]}")
+    if trusted or os.environ.get("EBOOKIFY_ALLOW_PRIVATE"):
+        return
+    port = u.port or (443 if u.scheme == "https" else 80)
+    for info in socket.getaddrinfo(u.hostname, port, proto=socket.IPPROTO_TCP):
+        ip = ipaddress.ip_address(info[4][0])
+        if not ip.is_global:
+            raise ValueError(f"refusing {u.hostname}: resolves to non-public address {ip}")
+
+
+def download(url: str, dest: Path, timeout: int = 60, trusted: bool = False) -> Path | None:
+    """Stream url to dest. trusted=True only for URLs the user typed; anything taken
+    from fetched content must stay untrusted (see check_url). Redirects are followed
+    manually so every hop is checked."""
     import requests
     tmp = dest.with_name(dest.name + ".part")
     try:
-        with requests.get(url, headers={"User-Agent": UA}, timeout=timeout, stream=True) as r:
+        for _ in range(6):
+            check_url(url, trusted)
+            r = requests.get(url, headers={"User-Agent": UA}, timeout=timeout, stream=True,
+                             allow_redirects=False)
+            if r.is_redirect and r.headers.get("location"):
+                url = urljoin(url, r.headers["location"])
+                r.close()
+                continue
+            break
+        else:
+            raise ValueError("too many redirects")
+        with r:
             r.raise_for_status()
             with open(tmp, "wb") as fh:  # stream: podcast audio can be hundreds of MB
                 for chunk in r.iter_content(chunk_size=1 << 16):
                     fh.write(chunk)
     except Exception as e:  # noqa: BLE001
-        log(f"  ! could not download {url}: {e}")
+        log(f"  ! could not download {url[:200]}: {e}")
         tmp.unlink(missing_ok=True)
         return None
     tmp.replace(dest)
     return dest
+
+
+IMAGE_EXTS = (".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg")
+
+
+def safe_image_path(root: Path, src: str) -> Path | None:
+    """Resolve an image reference from book text. Only files inside BOOK/images/ with an
+    image extension are allowed: text comes from untrusted sources, and a reference like
+    ../../.ssh/id_rsa must never be embedded into a book that may be published."""
+    if re.match(r"^[a-z][a-z0-9+.-]*:", src, re.I) or src.startswith(("/", "\\")):
+        return None
+    images = (root / "images").resolve()
+    p = (root / src).resolve()
+    if not p.is_relative_to(images) or p.suffix.lower() not in IMAGE_EXTS or not p.is_file():
+        return None
+    return p
+
+
+def neutralize_html(md: str) -> str:
+    """Make fetched (untrusted) text inert before it reaches pandoc, which passes raw HTML
+    straight into the reader page. Outside code: drop comments, turn <br>/<sup>/<sub> into
+    markdown, escape every other tag. Everywhere: strip pandoc raw attributes ({=html})."""
+    md = re.sub(r"(`+)\{=[A-Za-z0-9_-]+\}", r"\1", md)
+
+    def prose(chunk):
+        pieces = re.split(r"(`+[^`]*?`+)", chunk)  # keep inline code spans as they are
+        for i in range(0, len(pieces), 2):
+            t = re.sub(r"(?s)<!--.*?-->", "", pieces[i])
+            t = re.sub(r"(?i)<br\s*/?>", " ", t)
+            t = re.sub(r"(?i)</?(?:span|div|font|center|p)\b[^>]*>", "", t)
+            t = re.sub(r"(?i)</?(?:b|strong)>", "**", t)
+            t = re.sub(r"(?i)</?(?:i|em)>", "*", t)
+            t = re.sub(r"(?is)<sup>(.*?)</sup>", lambda m: "^" + m.group(1).replace(" ", "\\ ") + "^", t)
+            t = re.sub(r"(?is)<sub>(.*?)</sub>", lambda m: "~" + m.group(1).replace(" ", "\\ ") + "~", t)
+            pieces[i] = re.sub(r"<(?=[A-Za-z/!?])", r"\\<", t)
+        return "".join(pieces)
+    return outside_code(md, prose)
 
 
 def localize_images(md: str, base_url: str, images_dir: Path, prefix: str) -> str:
@@ -197,7 +268,7 @@ def localize_images(md: str, base_url: str, images_dir: Path, prefix: str) -> st
         absu = urljoin(base_url, src)
         if absu not in cache:
             ext = Path(urlparse(absu).path).suffix.lower()
-            if ext not in (".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg"):
+            if ext not in IMAGE_EXTS:
                 ext = ".img"
             name = f"{prefix}-{hashlib.sha1(absu.encode()).hexdigest()[:10]}{ext}"
             dest = images_dir / name

@@ -26,7 +26,7 @@ from pathlib import Path
 
 import defusedxml.ElementTree as ET  # feeds are untrusted: block XXE / entity bombs
 
-from common import UA, Book, download, fix_image_ext, fmt_ts, log, slugify, write_json
+from common import UA, Book, download, fix_image_ext, fmt_ts, log, neutralize_html, slugify, write_json
 
 MAX_WORDS_PER_FILE = 2500
 PODCAST_NS = "https://podcastindex.org/namespace/1.0"
@@ -300,7 +300,7 @@ def write_drafts(book: Book, idx: str, title: str, paras, chapters):
         for p in cps:
             mark = f"[[t={int(p['start'])}]] " if p["start"] is not None else ""
             spk = f"**{p['speaker']}:** " if p.get("speaker") else ""
-            cur.append(mark + spk + p["text"])
+            cur.append(mark + spk + neutralize_html(p["text"]))  # transcript text is untrusted
             words += len(p["text"].split())
             if words >= MAX_WORDS_PER_FILE:
                 parts.append(cur)
@@ -312,9 +312,9 @@ def write_drafts(book: Book, idx: str, title: str, paras, chapters):
             name = f"{idx}-{ci + 1:03d}-{slugify(ch['title'], 40)}{f'-part{pi}' if pi > 1 else ''}.md"
             head = []
             if ci == 0 and pi == 1:
-                head.append(f"# {title}")
+                head.append(f"# {neutralize_html(title)}")
             if pi == 1:
-                head.append(heading)
+                head.append(neutralize_html(heading))
             book.write_draft(name, "\n\n".join(head + body))
             names.append(name)
     return names
@@ -406,7 +406,8 @@ def main():
         log("no usable captions/transcript: downloading audio for Whisper")
         if a.feed or (a.url and re.search(r"\.(mp3|m4a|ogg|opus|wav|aac)(\?|$)", a.url or "", re.I)):
             src = audio_url or a.url
-            audio = download(src, raw / ("audio" + (Path(src.split("?")[0]).suffix or ".mp3")), timeout=900)
+            dest = raw / ("audio" + (Path(src.split("?")[0]).suffix or ".mp3"))
+            audio = download(src, dest, timeout=900, trusted=not a.feed)  # feed enclosures are untrusted
             if not audio:
                 raise SystemExit("audio download failed")
         else:

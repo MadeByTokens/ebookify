@@ -94,7 +94,9 @@ Pull quote (entertain mode; verbatim from the source):
 ```
 
 Widget: a small self-contained animation or interactive diagram. Raw HTML passes through
-pandoc. Rules: no external requests except the CDNs listed below, inline `<script>`,
+pandoc. The reader page has a strict content security policy: scripts load only inline
+or from cdnjs, jsdelivr and unpkg; images only as `data:`/`blob:`; no fetch/XHR to any
+host. Rules: draw with canvas or inline SVG, inline `<script>`,
 read colors from the CSS variables (`var(--accent)`, `var(--ink)`, `var(--paper)`)
 via `getComputedStyle` so it works in light and dark themes, respect
 `prefers-reduced-motion`, start in a visible, meaningful state (not a blank canvas
