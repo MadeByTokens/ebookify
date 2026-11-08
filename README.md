@@ -42,7 +42,7 @@ audio. Optional: an NVIDIA GPU for fast Whisper, `marker_single` for OCR, and
 `epubcheck` for strict validation.
 
 ```bash
-git clone <this repo> ebookskill
+git clone https://github.com/MadeByTokens/ebookify.git ebookskill
 bash ebookskill/ebookify/scripts/setup.sh        # creates ebookify/.venv and reports what is available
 ```
 
@@ -167,6 +167,10 @@ untrusted, because the output may be published:
   remote images.
 - Fetchers also escape raw HTML in fetched text as defense in depth. It only makes
   drafts read better; the filter above is what enforces safety.
+
+## License
+
+[MIT](LICENSE) © 2026 Ricardo de Azambuja
 
 ## Legal
 
